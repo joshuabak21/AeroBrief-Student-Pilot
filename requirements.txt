@@ -1,0 +1,5 @@
+# Third-party modules imported by the app (Streamlit is provided by Community Cloud).
+requests
+pydantic-ai
+pandas
+altair
