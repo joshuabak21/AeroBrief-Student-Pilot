@@ -1,4 +1,4 @@
-"""Lab 3 Page 2: theme-focused Pydantic AI chatbot with session memory, no tools."""
+"""AeroTutor: aviation study chatbot that remembers the current conversation."""
 
 import streamlit as st
 
@@ -10,99 +10,68 @@ apply_theme()
 st.markdown('<div class="ab-kicker">02 / Aviation ground-school companion</div>', unsafe_allow_html=True)
 st.title("AeroTutor")
 st.markdown(
-    '<p class="ab-lead">An AI study partner for student pilots. Ask about weather terms, '
-    'aerodynamics basics, VFR concepts, runway headings, and flight-training vocabulary.</p>',
+    '<p class="ab-lead">Ask questions about aviation weather, aerodynamics, VFR, and flight training.</p>',
     unsafe_allow_html=True,
 )
+st.info("AeroTutor is a study helper, not a live weather or FAA regulation lookup. It has no external tools in Lab 3.")
 
-st.info(
-    "Lab 3 scope: AeroTutor has **no external tools or access to the weather dashboard**. "
-    "It cannot retrieve current METARs, forecasts, or regulations. "
-    "It is for learning, not operational flight decisions."
+# Instructions tell the AI how to behave. It cannot use the weather API.
+INSTRUCTIONS = (
+    "You are AeroTutor, a friendly student-pilot study assistant. "
+    "Explain aviation terms clearly and keep answers reasonably short. "
+    "Remember information shared earlier in this conversation. "
+    "You have no tools or access to current weather, live FAA regulations, or the app's weather page. "
+    "Never invent live conditions or decide whether someone should fly. "
+    "For real flight decisions, recommend official sources and a flight instructor."
 )
 
 try:
-    api_key = str(st.secrets.get("GOOGLE_API_KEY", "")).strip()
+    api_key = st.secrets.get("GOOGLE_API_KEY", "")
 except Exception:
     api_key = ""
 
-if not api_key or api_key.startswith("REPLACE_"):
-    st.warning(
-        "Gemini API key not configured. Copy `.streamlit/secrets.toml.example` to "
-        "`.streamlit/secrets.toml` and insert your own key locally. For a deployed app, "
-        "add the key in Streamlit Community Cloud → App settings → Secrets."
-    )
+# Both the displayed messages and the AI's conversation history are saved.
+if "chat_messages" not in st.session_state:
+    st.session_state.chat_messages = []
+if "ai_history" not in st.session_state:
+    st.session_state.ai_history = []
 
-if "aerotutor_chat_log" not in st.session_state:
-    st.session_state.aerotutor_chat_log = []
-if "aerotutor_pydantic_history" not in st.session_state:
-    st.session_state.aerotutor_pydantic_history = []
+if st.button("Clear conversation"):
+    st.session_state.chat_messages = []
+    st.session_state.ai_history = []
+    st.rerun()
 
-left, right = st.columns([3, 1])
-with left:
-    st.caption("Try: 'Explain a crosswind to a student pilot' · 'What does VFR mean?' · 'Remember my favorite training aircraft is a C172'")
-with right:
-    if st.button("Clear conversation", use_container_width=True):
-        st.session_state.aerotutor_chat_log = []
-        st.session_state.aerotutor_pydantic_history = []
-        st.rerun()
+for message in st.session_state.chat_messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-for entry in st.session_state.aerotutor_chat_log:
-    with st.chat_message(entry["role"]):
-        st.markdown(entry["content"])
-
-prompt = st.chat_input("Ask an aviation-training question...")
-if prompt:
-    st.session_state.aerotutor_chat_log.append({"role": "user", "content": prompt})
+question = st.chat_input("Ask an aviation-training question...")
+if question:
+    st.session_state.chat_messages.append({"role": "user", "content": question})
     with st.chat_message("user"):
-        st.markdown(prompt)
+        st.markdown(question)
 
     with st.chat_message("assistant"):
-        if not api_key or api_key.startswith("REPLACE_"):
-            answer = "A Gemini API key is required before I can respond. Please configure it in Streamlit Secrets."
+        if not api_key:
+            answer = "Add your Gemini API key in Streamlit Settings → Secrets to use AeroTutor."
             st.warning(answer)
         else:
-            with st.spinner("AeroTutor is thinking..."):
-                try:
-                    from pydantic_ai import Agent
-                    from pydantic_ai.models.google import GoogleModel
-                    from pydantic_ai.providers.google import GoogleProvider
+            try:
+                from pydantic_ai import Agent
+                from pydantic_ai.models.google import GoogleModel
+                from pydantic_ai.providers.google import GoogleProvider
 
-                    provider = GoogleProvider(api_key=api_key)
-                    model = GoogleModel("gemini-3.5-flash-lite", provider=provider)
-                    agent = Agent(
-                        model,
-                        instructions=(
-                            "You are AeroTutor, a concise, friendly student-pilot ground-school "
-                            "study assistant. Answer questions about aviation vocabulary, "
-                            "weather concepts, aerodynamics, and learning to fly. Explain "
-                            "terms in approachable language and ask an occasional useful "
-                            "study-check question. Remember facts the student shares within "
-                            "this conversation, but avoid pretending to remember across sessions. "
-                            "You have no tools and NO ACCESS to real-time weather, the app's "
-                            "weather data page, airport status, or live FAA regulations. "
-                            "Never fabricate current readings or claim a flight is safe. "
-                            "If asked for exact live conditions, say you can't look them up; "
-                            "point to official aviation weather and their CFI. "
-                            "Do not give a personalized operational go/no-go decision. "
-                            "If rules or procedures could have changed, say to check the current FAA guidance."
-                        ),
-                    )
-                    result = agent.run_sync(
-                        prompt,
-                        message_history=st.session_state.aerotutor_pydantic_history,
-                    )
-                    answer = str(result.output)
-                    st.session_state.aerotutor_pydantic_history = result.all_messages()
-                    st.markdown(answer)
-                except Exception:
-                    # Deliberately avoid showing provider errors or credentials to the user.
-                    answer = (
-                        "Sorry, AeroTutor couldn't respond right now. "
-                        "The model may be busy, a quota may have been reached, "
-                        "or the API key may need checking. Please try again."
-                    )
-                    st.error(answer)
-        st.session_state.aerotutor_chat_log.append({"role": "assistant", "content": answer})
+                model = GoogleModel("gemini-3.5-flash-lite", provider=GoogleProvider(api_key=api_key))
+                agent = Agent(model, instructions=INSTRUCTIONS)
+                with st.spinner("AeroTutor is thinking..."):
+                    result = agent.run_sync(question, message_history=st.session_state.ai_history)
+                answer = str(result.output)
+                st.session_state.ai_history = result.all_messages()
+                st.markdown(answer)
+            except Exception:
+                # An AI error should not crash the web page or reveal secret details.
+                answer = "Sorry, AeroTutor could not respond. Check your key or try again later."
+                st.error(answer)
+        st.session_state.chat_messages.append({"role": "assistant", "content": answer})
 
-st.caption("Powered by Pydantic AI + Google Gemini when configured. Answers are educational and may be incorrect; verify important facts with official FAA material.")
+st.caption("For educational use only. Verify important aviation information with official FAA guidance and your CFI.")
