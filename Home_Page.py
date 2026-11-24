@@ -48,6 +48,6 @@ with col1:
     st.markdown("**Data:** [Open-Meteo forecast API](https://open-meteo.com/en/docs) and [geocoding API](https://open-meteo.com/en/docs/geocoding-api)")
 with col2:
     st.markdown("**Class:** CS 1301 · Fall 2026")
-    st.markdown("**Team:** Add your team number, section and team members before submission.")
+    st.markdown("**Team:** Team 29, Section D Joshua Bakare, Ryosuke Ebata")
 
 safety_note()
